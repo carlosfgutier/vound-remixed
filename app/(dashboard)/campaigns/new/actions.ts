@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { campaignInputSchema } from "@/lib/schema/campaign-input";
 import type { EnrichmentSpec } from "@/lib/schema/enrichment-spec";
 import { generateEnrichmentSpec } from "@/lib/ai/generate-enrichment-spec";
@@ -164,5 +165,6 @@ export async function defineEnrichmentAction(
     return { ok: false, error: contactsError.message };
   }
 
+  revalidatePath("/", "layout");
   redirect(`/campaigns/${campaignId}`);
 }
