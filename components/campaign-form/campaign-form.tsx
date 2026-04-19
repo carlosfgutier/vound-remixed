@@ -6,26 +6,18 @@ import { Button } from "@/components/ui/button";
 import { TextField } from "./text-field";
 import { GoalsField } from "./goals-field";
 import { ContactsSection } from "./contacts-section";
-import { EnrichmentSpecView } from "./enrichment-spec-view";
 import {
   CAMPAIGN_TYPE_EXAMPLES,
   AUDIENCE_EXAMPLES,
 } from "@/lib/example-prompts";
 import {
   campaignInputSchema,
-  type CampaignInput,
   type ContactsInput,
   type RankedGoal,
 } from "@/lib/schema/campaign-input";
-import type { EnrichmentSpec } from "@/lib/schema/enrichment-spec";
 import { defineEnrichmentAction } from "@/app/(dashboard)/campaigns/new/actions";
 
 type FieldErrors = Partial<Record<string, string>>;
-
-type SpecState = {
-  spec: EnrichmentSpec;
-  input: CampaignInput;
-};
 
 export function CampaignForm() {
   const [campaignType, setCampaignType] = useState("");
@@ -33,7 +25,6 @@ export function CampaignForm() {
   const [goals, setGoals] = useState<RankedGoal[]>([]);
   const [contacts, setContacts] = useState<ContactsInput | null>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [specState, setSpecState] = useState<SpecState | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -61,24 +52,11 @@ export function CampaignForm() {
     }
 
     startTransition(async () => {
+      // On success this server action calls `redirect()` and never returns.
       const result = await defineEnrichmentAction(parsed.data);
-      if (!result.ok) {
-        setServerError(result.error);
-        return;
-      }
-      setSpecState({ spec: result.spec, input: result.input });
+      if (result && !result.ok) setServerError(result.error);
     });
   };
-
-  if (specState) {
-    return (
-      <EnrichmentSpecView
-        spec={specState.spec}
-        input={specState.input}
-        onBack={() => setSpecState(null)}
-      />
-    );
-  }
 
   if (isPending) {
     return <GeneratingPlaceholder />;
@@ -120,13 +98,9 @@ export function CampaignForm() {
         </div>
       )}
 
-      <div className="flex items-center justify-between border-t border-border pt-6">
-        <div className="text-[11px] text-muted-foreground">
-          Step <span className="font-mono text-foreground">01</span> of{" "}
-          <span className="font-mono text-foreground">06</span> · Input
-        </div>
+      <div className="flex justify-end border-t border-border pt-6">
         <Button type="submit" variant="primary" disabled={isPending}>
-          Continue to enrichment
+          Continue to enrichment spec
           <ArrowRight className="h-3.5 w-3.5" />
         </Button>
       </div>

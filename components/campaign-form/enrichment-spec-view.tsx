@@ -1,6 +1,5 @@
-"use client";
-
-import { ArrowLeft, Sparkles, Target, Zap } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Sparkles, Target, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   STANDARD_ACCOUNT_FIELDS,
@@ -13,17 +12,15 @@ import {
   type CustomField,
 } from "@/lib/schema/enrichment-spec";
 import { CAMPAIGN_GOALS } from "@/lib/campaign-goals";
-import type { CampaignInput } from "@/lib/schema/campaign-input";
+import type { RankedGoal } from "@/lib/schema/campaign-input";
 
-export function EnrichmentSpecView({
-  spec,
-  input,
-  onBack,
-}: {
+type Props = {
   spec: EnrichmentSpec;
-  input: CampaignInput;
-  onBack: () => void;
-}) {
+  goals: RankedGoal[];
+  campaignId: string;
+};
+
+export function EnrichmentSpecView({ spec, goals, campaignId }: Props) {
   return (
     <div className="space-y-8">
       <div className="rounded-lg border border-accent/40 bg-accent/5 p-5">
@@ -50,19 +47,17 @@ export function EnrichmentSpecView({
         custom={spec.contact.custom_fields}
       />
 
-      <RubricSection input={input} spec={spec} />
+      <RubricSection goals={goals} spec={spec} />
 
       <HooksSection spec={spec} />
 
-      <div className="flex items-center justify-between border-t border-border pt-6">
-        <Button variant="ghost" onClick={onBack}>
-          <ArrowLeft className="h-3.5 w-3.5" />
-          Back to form
+      <div className="flex justify-end border-t border-border pt-6">
+        <Button asChild variant="primary">
+          <Link href={`/campaigns/${campaignId}/enrichment`}>
+            Run enrichment
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </Button>
-        <div className="text-[11px] text-muted-foreground">
-          Step <span className="font-mono text-foreground">02</span> of{" "}
-          <span className="font-mono text-foreground">06</span> · Object definition
-        </div>
       </div>
     </div>
   );
@@ -193,10 +188,10 @@ function SourceBadge({
 }
 
 function RubricSection({
-  input,
+  goals,
   spec,
 }: {
-  input: CampaignInput;
+  goals: RankedGoal[];
   spec: EnrichmentSpec;
 }) {
   return (
@@ -209,10 +204,9 @@ function RubricSection({
       </div>
       <div className="space-y-3">
         {spec.qualification_rubric.map((rule, i) => {
-          const goal = input.goals.find((g) => g.id === rule.goal_id);
+          const goal = goals.find((g) => g.id === rule.goal_id);
           const base = CAMPAIGN_GOALS.find((cg) => cg.id === rule.goal_id);
-          const label =
-            goal?.customLabel ?? base?.label ?? rule.goal_id;
+          const label = goal?.customLabel ?? base?.label ?? rule.goal_id;
           return (
             <div
               key={`${rule.goal_id}-${i}`}

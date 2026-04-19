@@ -1,4 +1,5 @@
 import { CampaignForm } from "@/components/campaign-form/campaign-form";
+import { PhaseTracker } from "@/components/phase-tracker/phase-tracker";
 
 export const metadata = {
   title: "New campaign · vBound",
@@ -15,6 +16,12 @@ export default function NewCampaignPage() {
           Tell vBound what you&apos;re sending.
         </h1>
       </header>
+
+      <div className="border-b border-border px-8 py-4">
+        <div className="mx-auto w-full max-w-3xl">
+          <PhaseTracker current="input" />
+        </div>
+      </div>
 
       <div className="flex-1 overflow-y-auto px-8 py-8">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
