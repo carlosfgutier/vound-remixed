@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Building2, User } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowRight, Building2, FileText, Loader2, Play, User } from "lucide-react";
 import {
   STANDARD_ACCOUNT_FIELDS,
   STANDARD_CONTACT_FIELDS,
@@ -9,6 +10,23 @@ import {
 } from "@/lib/campaign-standard-fields";
 import type { CustomField } from "@/lib/schema/enrichment-spec";
 import { cn } from "@/lib/utils";
+import { ReportModal } from "@/components/enrichment/report-modal";
+
+type EnrichmentEvent =
+  | { type: "start"; accounts: number; contacts: number }
+  | {
+      type: "account";
+      id: string;
+      status: "enriching" | "enriched" | "failed";
+      error?: string;
+    }
+  | {
+      type: "contact";
+      id: string;
+      status: "enriching" | "enriched" | "failed";
+      error?: string;
+    }
+  | { type: "done" };
 
 export type AccountRow = {
   id: string;
@@ -41,6 +59,9 @@ export type ContactRow = {
 };
 
 type Props = {
+  campaignId: string;
+  campaignName: string;
+  initialRunId?: string | null;
   accounts: AccountRow[];
   contacts: ContactRow[];
   accountCustomFields: CustomField[];
@@ -50,31 +71,294 @@ type Props = {
 type Tab = "companies" | "people";
 
 export function EnrichmentTables({
-  accounts,
-  contacts,
+  campaignId,
+  campaignName,
+  initialRunId,
+  accounts: initialAccounts,
+  contacts: initialContacts,
   accountCustomFields,
   contactCustomFields,
 }: Props) {
   const [tab, setTab] = useState<Tab>("companies");
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+
+  // Live status overrides while workflow runs. The server data is the source
+  // of truth; these overrides only apply during an active run.
+  const [accountStatus, setAccountStatus] = useState<Record<string, string>>({});
+  const [contactStatus, setContactStatus] = useState<Record<string, string>>({});
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState<{
+    accountsDone: number;
+    contactsDone: number;
+    total: number;
+  } | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [continuing, setContinuing] = useState(false);
+
+  const accounts = useMemo(
+    () =>
+      initialAccounts.map((a) =>
+        accountStatus[a.id]
+          ? { ...a, enrichment_status: accountStatus[a.id]! }
+          : a,
+      ),
+    [initialAccounts, accountStatus],
+  );
+  const contacts = useMemo(
+    () =>
+      initialContacts.map((c) =>
+        contactStatus[c.id]
+          ? { ...c, enrichment_status: contactStatus[c.id]! }
+          : c,
+      ),
+    [initialContacts, contactStatus],
+  );
+
+  const consumeStream = useCallback(
+    async (runId: string) => {
+      const streamRes = await fetch(
+        `/api/campaigns/${campaignId}/enrich?runId=${runId}`,
+      );
+      if (!streamRes.ok || !streamRes.body) {
+        throw new Error(`stream failed (${streamRes.status})`);
+      }
+
+      const reader = streamRes.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accountsDone = 0;
+      let contactsDone = 0;
+      let total = 0;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let newlineIdx: number;
+        while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
+          const line = buffer.slice(0, newlineIdx).trim();
+          buffer = buffer.slice(newlineIdx + 1);
+          if (!line) continue;
+          let event: EnrichmentEvent | null = null;
+          try {
+            event = JSON.parse(line) as EnrichmentEvent;
+          } catch {
+            continue;
+          }
+          if (!event) continue;
+          if (event.type === "start") {
+            total = event.accounts + event.contacts;
+            setProgress({ accountsDone: 0, contactsDone: 0, total });
+          } else if (event.type === "account") {
+            setAccountStatus((prev) => ({ ...prev, [event.id]: event.status }));
+            if (event.status === "enriched" || event.status === "failed") {
+              accountsDone += 1;
+              setProgress({ accountsDone, contactsDone, total });
+            }
+          } else if (event.type === "contact") {
+            setContactStatus((prev) => ({ ...prev, [event.id]: event.status }));
+            if (event.status === "enriched" || event.status === "failed") {
+              contactsDone += 1;
+              setProgress({ accountsDone, contactsDone, total });
+            }
+          } else if (event.type === "done") {
+            // stream will close momentarily
+          }
+        }
+      }
+
+      startTransition(() => {
+        router.refresh();
+      });
+    },
+    [campaignId, router],
+  );
+
+  const startRun = useCallback(async () => {
+    setRunError(null);
+    setRunning(true);
+    setProgress({ accountsDone: 0, contactsDone: 0, total: 0 });
+    setAccountStatus({});
+    setContactStatus({});
+
+    try {
+      const startRes = await fetch(`/api/campaigns/${campaignId}/enrich`, {
+        method: "POST",
+      });
+      if (!startRes.ok) throw new Error(`start failed (${startRes.status})`);
+      const { runId } = (await startRes.json()) as { runId: string };
+      await consumeStream(runId);
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : "Enrichment failed");
+    } finally {
+      setRunning(false);
+    }
+  }, [campaignId, consumeStream]);
+
+  // Auto-subscribe on mount if a run was started by the server action and
+  // there are still pending/enriching rows (i.e. the run is not yet done).
+  const autoSubscribedRef = useRef(false);
+  useEffect(() => {
+    if (autoSubscribedRef.current) return;
+    if (!initialRunId) return;
+    const stillRunning =
+      initialAccounts.some(
+        (a) => a.enrichment_status === "pending" || a.enrichment_status === "enriching",
+      ) ||
+      initialContacts.some(
+        (c) => c.enrichment_status === "pending" || c.enrichment_status === "enriching",
+      );
+    if (!stillRunning) return;
+    autoSubscribedRef.current = true;
+
+    (async () => {
+      setRunError(null);
+      setRunning(true);
+      setProgress({ accountsDone: 0, contactsDone: 0, total: 0 });
+      try {
+        await consumeStream(initialRunId);
+      } catch (err) {
+        setRunError(err instanceof Error ? err.message : "Enrichment failed");
+      } finally {
+        setRunning(false);
+      }
+    })();
+  }, [initialRunId, initialAccounts, initialContacts, consumeStream]);
+
+  const canRun = !running && (initialAccounts.length > 0 || initialContacts.length > 0);
+
+  const allRowsDone = useMemo(() => {
+    const hasAny = accounts.length > 0 || contacts.length > 0;
+    if (!hasAny) return false;
+    const isDone = (s: string) => s === "enriched" || s === "failed";
+    return (
+      accounts.every((a) => isDone(a.enrichment_status)) &&
+      contacts.every((c) => isDone(c.enrichment_status))
+    );
+  }, [accounts, contacts]);
+
+  const canPreview = !running && allRowsDone;
+  const canContinue = !running && !continuing && allRowsDone;
+
+  const continueToEmails = useCallback(async () => {
+    setContinuing(true);
+    setRunError(null);
+    try {
+      // Fire the strategist workflow (idempotent-ish: produces a new run each
+      // click). The emails page auto-subscribes to the latest run id.
+      const res = await fetch(`/api/campaigns/${campaignId}/messaging`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to start strategist (${res.status})`);
+      }
+      router.push(`/campaigns/${campaignId}/emails`);
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : "Could not continue");
+      setContinuing(false);
+    }
+  }, [campaignId, router]);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-1 rounded-md border border-border bg-surface/40 p-1 w-fit">
-        <TabButton
-          active={tab === "companies"}
-          onClick={() => setTab("companies")}
-          icon={<Building2 className="h-3.5 w-3.5" />}
-          label="Companies"
-          count={accounts.length}
-        />
-        <TabButton
-          active={tab === "people"}
-          onClick={() => setTab("people")}
-          icon={<User className="h-3.5 w-3.5" />}
-          label="People"
-          count={contacts.length}
-        />
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-1 rounded-md border border-border bg-surface/40 p-1 w-fit">
+          <TabButton
+            active={tab === "companies"}
+            onClick={() => setTab("companies")}
+            icon={<Building2 className="h-3.5 w-3.5" />}
+            label="Companies"
+            count={accounts.length}
+          />
+          <TabButton
+            active={tab === "people"}
+            onClick={() => setTab("people")}
+            icon={<User className="h-3.5 w-3.5" />}
+            label="People"
+            count={contacts.length}
+          />
+        </div>
+
+        <div className="flex items-center gap-3">
+          {progress && progress.total > 0 && (
+            <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+              {progress.accountsDone + progress.contactsDone} / {progress.total}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setReportOpen(true)}
+            disabled={!canPreview}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-[12px] font-medium transition",
+              canPreview
+                ? "border-border bg-surface text-foreground hover:bg-surface/80"
+                : "cursor-not-allowed border-border bg-surface text-muted-foreground opacity-60",
+            )}
+            title={
+              canPreview
+                ? "Preview the enrichment results"
+                : "Preview available after enrichment finishes"
+            }
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Preview enrichment results
+          </button>
+          <button
+            type="button"
+            onClick={startRun}
+            disabled={!canRun}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-[12px] font-medium transition",
+              canRun
+                ? "border-accent/60 bg-accent text-background hover:bg-accent/90"
+                : "cursor-not-allowed border-border bg-surface text-muted-foreground",
+            )}
+          >
+            {running ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Play className="h-3.5 w-3.5" />
+            )}
+            {running
+              ? "Enriching…"
+              : initialRunId
+                ? "Re-run enrichment"
+                : "Run enrichment"}
+          </button>
+          <button
+            type="button"
+            onClick={continueToEmails}
+            disabled={!canContinue}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-[12px] font-medium transition",
+              canContinue
+                ? "border-accent/60 bg-accent text-background hover:bg-accent/90"
+                : "cursor-not-allowed border-border bg-surface text-muted-foreground opacity-60",
+            )}
+            title={
+              canContinue
+                ? "Start the marketing strategist and move to Phase 4"
+                : "Available after enrichment finishes"
+            }
+          >
+            {continuing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ArrowRight className="h-3.5 w-3.5" />
+            )}
+            {continuing ? "Starting…" : "Continue to emails"}
+          </button>
+        </div>
       </div>
+
+      {runError && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">
+          {runError}
+        </div>
+      )}
 
       {tab === "companies" ? (
         <DataTable
@@ -93,6 +377,13 @@ export function EnrichmentTables({
           emptyLabel="No contacts imported yet."
         />
       )}
+
+      <ReportModal
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        campaignId={campaignId}
+        campaignName={campaignName}
+      />
     </div>
   );
 }

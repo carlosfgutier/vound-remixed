@@ -2,11 +2,13 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { start } from "workflow/api";
 import { campaignInputSchema } from "@/lib/schema/campaign-input";
 import type { EnrichmentSpec } from "@/lib/schema/enrichment-spec";
 import { generateEnrichmentSpec } from "@/lib/ai/generate-enrichment-spec";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { companyDomainFromEmail } from "@/lib/email-domains";
+import { enrichCampaignWorkflow } from "@/workflows/enrich-campaign";
 
 export type DefineEnrichmentResult = { ok: false; error: string };
 
@@ -165,6 +167,19 @@ export async function defineEnrichmentAction(
     return { ok: false, error: contactsError.message };
   }
 
+  // Kick off enrichment in the background and record the runId so Phase 3
+  // can subscribe to the stream on mount. If this fails we still navigate
+  // to Phase 3 — the user can retry from there.
+  try {
+    const run = await start(enrichCampaignWorkflow, [campaignId]);
+    await supabase
+      .from("campaigns")
+      .update({ enrichment_run_id: run.runId })
+      .eq("id", campaignId);
+  } catch (err) {
+    console.error("[defineEnrichmentAction] failed to start workflow", err);
+  }
+
   revalidatePath("/", "layout");
-  redirect(`/campaigns/${campaignId}`);
+  redirect(`/campaigns/${campaignId}/enrichment`);
 }

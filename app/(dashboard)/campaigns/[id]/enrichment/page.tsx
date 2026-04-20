@@ -26,7 +26,7 @@ export default async function EnrichmentPage({ params }: PageProps) {
     await Promise.all([
       supabase
         .from("campaigns")
-        .select("id, name, campaign_type, enrichment_spec")
+        .select("id, name, campaign_type, enrichment_spec, enrichment_run_id")
         .eq("id", id)
         .maybeSingle(),
       supabase
@@ -81,6 +81,11 @@ export default async function EnrichmentPage({ params }: PageProps) {
           </div>
 
           <EnrichmentTables
+            campaignId={id}
+            campaignName={campaign.name as string}
+            initialRunId={
+              (campaign.enrichment_run_id as string | null) ?? null
+            }
             accounts={accounts}
             contacts={contacts}
             accountCustomFields={spec?.account.custom_fields ?? []}
