@@ -8,20 +8,18 @@ export const companySummarySchema = z.object({
   summary: z
     .string()
     .min(40)
-    .max(600)
     .describe(
       "2-3 sentences on what this company does, who it sells to, and why it matters in its market.",
     ),
   angle: z
     .string()
     .min(30)
-    .max(400)
     .describe(
       "One-sentence opening angle the email writer should reach for with THIS company — tied to the campaign brief.",
     ),
   insights: z
-    .array(z.string().min(8).max(180))
-    .min(2)
+    .array(z.string().min(8))
+    .min(1)
     .max(5)
     .describe(
       "Concrete, testable signals from the enriched data worth highlighting (news, hiring, custom field values, growth stage, etc.).",

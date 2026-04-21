@@ -53,24 +53,30 @@ export async function POST(
   }
 
   // Generate (fresh each POST — callers decide whether to re-generate).
-  const output = await generateCompanySummary(
-    {
-      company_name: account.company_name as string | null,
-      company_domain: account.company_domain as string | null,
-      company_website: account.company_website as string | null,
-      company_description: account.company_description as string | null,
-      industry_iso: account.industry_iso as string | null,
-      employee_count: account.employee_count as number | null,
-      hq_country: account.hq_country as string | null,
-      funding_stage: account.funding_stage as string | null,
-      custom_data: (account.custom_data as Record<string, unknown> | null) ?? null,
-    },
-    {
-      campaign_type: campaign.campaign_type as string | null,
-      audience: campaign.audience as string | null,
-      goals: campaign.goals,
-    },
-  );
+  let output;
+  try {
+    output = await generateCompanySummary(
+      {
+        company_name: account.company_name as string | null,
+        company_domain: account.company_domain as string | null,
+        company_website: account.company_website as string | null,
+        company_description: account.company_description as string | null,
+        industry_iso: account.industry_iso as string | null,
+        employee_count: account.employee_count as number | null,
+        hq_country: account.hq_country as string | null,
+        funding_stage: account.funding_stage as string | null,
+        custom_data: (account.custom_data as Record<string, unknown> | null) ?? null,
+      },
+      {
+        campaign_type: campaign.campaign_type as string | null,
+        audience: campaign.audience as string | null,
+        goals: campaign.goals,
+      },
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to generate company summary";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 
   const summary_generated_at = new Date().toISOString();
   const { error: updateError } = await supabase
