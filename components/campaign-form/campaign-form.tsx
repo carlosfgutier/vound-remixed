@@ -8,10 +8,6 @@ import { ContactsSection } from "./contacts-section";
 import { ProvidersGrid } from "./providers-grid";
 import { WizardShell } from "./wizard-shell";
 import {
-  CAMPAIGN_TYPE_EXAMPLES,
-  AUDIENCE_EXAMPLES,
-} from "@/lib/example-prompts";
-import {
   campaignInputSchema,
   type ContactsInput,
   type RankedGoal,
@@ -132,7 +128,6 @@ export function CampaignForm() {
             value={campaignType}
             onChange={setCampaignType}
             placeholder="e.g., Follow-up to people who visited our booth at KubeCon — we want to book intro calls with the ones who showed real interest."
-            examples={CAMPAIGN_TYPE_EXAMPLES}
             error={errors.campaignType}
           />
           <TextField
@@ -141,7 +136,6 @@ export function CampaignForm() {
             value={audience}
             onChange={setAudience}
             placeholder="e.g., 143 attendees who scanned their badge at our booth. We have name, email, and company — nothing else."
-            examples={AUDIENCE_EXAMPLES}
             error={errors.audience}
           />
           <GoalsField value={goals} onChange={setGoals} error={errors.goals} />

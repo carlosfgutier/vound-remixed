@@ -2,7 +2,6 @@
 
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { ExampleChips } from "./example-chips";
 
 type Props = {
   label: string;
@@ -10,7 +9,6 @@ type Props = {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
-  examples: readonly string[];
   error?: string;
   rows?: number;
   hint?: string;
@@ -23,7 +21,6 @@ export function TextField({
   value,
   onChange,
   placeholder,
-  examples,
   error,
   rows = 3,
   hint = "A sentence or two is plenty.",
@@ -44,21 +41,18 @@ export function TextField({
         aria-invalid={Boolean(error)}
         aria-describedby={`${htmlFor}-hint`}
       />
-      <div className="flex items-start justify-between gap-4">
-        <ExampleChips examples={examples} onPick={onChange} className="flex-1" />
-        <div
-          id={`${htmlFor}-hint`}
-          className="shrink-0 text-right font-mono text-[10px] text-muted-foreground"
-        >
-          {error ? (
-            <span className="text-destructive">{error}</span>
-          ) : (
-            <>
-              <span className={warn ? "text-destructive" : ""}>{len}</span>
-              <span className="text-muted-foreground/60"> · {hint}</span>
-            </>
-          )}
-        </div>
+      <div
+        id={`${htmlFor}-hint`}
+        className="flex items-center justify-end font-mono text-[10px] text-muted-foreground"
+      >
+        {error ? (
+          <span className="text-destructive">{error}</span>
+        ) : (
+          <>
+            <span className={warn ? "text-destructive" : ""}>{len}</span>
+            <span className="text-muted-foreground/60"> · {hint}</span>
+          </>
+        )}
       </div>
     </div>
   );
