@@ -4,23 +4,9 @@ import { useState } from "react";
 import { Plus, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CustomProviderModal } from "./custom-provider-modal";
+import { BUILT_IN_PROVIDERS, type Provider } from "./providers";
 
-export type Provider = {
-  id: string;
-  label: string;
-  description?: string;
-};
-
-export const BUILT_IN_PROVIDERS: Provider[] = [
-  { id: "salesforce", label: "Salesforce", description: "CRM of record" },
-  { id: "hubspot", label: "HubSpot", description: "CRM + activity" },
-  { id: "gong", label: "Gong", description: "Call intelligence" },
-  { id: "granola", label: "Granola", description: "Meeting notes" },
-  { id: "clearbit", label: "Clearbit", description: "Firmographics" },
-  { id: "zoominfo", label: "Zoominfo", description: "Contact data" },
-  { id: "clay", label: "Clay", description: "Enrichment graph" },
-  { id: "smartlead", label: "Smartlead", description: "Send activity" },
-];
+export { BUILT_IN_PROVIDERS, type Provider };
 
 type Props = {
   value: string[];

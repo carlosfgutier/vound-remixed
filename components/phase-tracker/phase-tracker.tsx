@@ -5,10 +5,25 @@ import { cn } from "@/lib/utils";
 type Props = {
   current: PhaseId;
   campaignId?: string;
+  /**
+   * When true, every phase with a resolvable href becomes clickable regardless
+   * of whether it is past/current/future. Callers pass this once the campaign
+   * has finished Loading (i.e. `email_strategy` is populated) so the user can
+   * bounce freely between Details, Loading, Preview, and Sequence from any
+   * phase view.
+   */
+  unlockFuture?: boolean;
 };
 
-export function PhaseTracker({ current, campaignId }: Props) {
+export function PhaseTracker({ current, campaignId, unlockFuture }: Props) {
   const currentIndex = PHASES.find((p) => p.id === current)?.index ?? 1;
+
+  // Auto-unlock heuristic: if we're already on Preview or Sequence, Loading
+  // has obviously completed. Callers on Details pass `unlockFuture` explicitly
+  // because `current === "details"` can't distinguish a fresh campaign from a
+  // finished one.
+  const postLoading =
+    unlockFuture === true || current === "preview" || current === "sequence";
 
   return (
     <nav aria-label="Campaign phases" className="w-full">
@@ -18,7 +33,8 @@ export function PhaseTracker({ current, campaignId }: Props) {
           const isPast = phase.index < currentIndex;
           const isFuture = phase.index > currentIndex;
           const href = phaseHref(phase.id, campaignId);
-          const interactive = (isPast || isCurrent) && href !== null;
+          const interactive =
+            href !== null && (isCurrent || isPast || postLoading);
 
           const dot = (
             <span
@@ -36,8 +52,8 @@ export function PhaseTracker({ current, campaignId }: Props) {
               className={cn(
                 "mt-2 text-[10px] font-mono uppercase tracking-[0.08em]",
                 isCurrent && "text-foreground",
-                isPast && "text-muted-foreground",
-                isFuture && "text-muted-foreground/60",
+                !isCurrent && interactive && "text-muted-foreground",
+                !isCurrent && !interactive && "text-muted-foreground/60",
               )}
             >
               {String(phase.index).padStart(2, "0")} · {phase.label}

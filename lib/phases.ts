@@ -19,7 +19,11 @@ export const PHASES: readonly Phase[] = [
 ] as const;
 
 export function phaseHref(phase: PhaseId, campaignId?: string): string | null {
-  if (phase === "details") return "/campaigns/new";
+  // Details on a fresh campaign lands on the wizard; on an existing campaign
+  // it lands on a read-only snapshot of the submitted brief.
+  if (phase === "details") {
+    return campaignId ? `/campaigns/${campaignId}/details` : "/campaigns/new";
+  }
   if (!campaignId) return null;
   switch (phase) {
     case "loading":  return `/campaigns/${campaignId}/loading`;
