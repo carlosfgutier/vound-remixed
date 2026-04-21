@@ -44,3 +44,7 @@ next-env.d.ts
 # generated deliverable binaries (markdown is the source of truth)
 deliverables/**/pdfs/
 *.pdf
+
+# presentation/preparation materials and generator scripts
+deliverables/presentation-prep/
+deliverables/**/scripts/
