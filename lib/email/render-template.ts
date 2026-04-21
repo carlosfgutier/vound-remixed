@@ -69,12 +69,6 @@ export type RenderedEmail = {
 export function resolvePath(ctx: RenderContext, path: string): unknown {
   const p = path.trim();
 
-  if (p === "company.name") return ctx.account?.company_name ?? null;
-  if (p === "company.domain") return ctx.account?.company_domain ?? null;
-  if (p === "company.website") return ctx.account?.company_website ?? null;
-  if (p === "company.description") return ctx.account?.company_description ?? null;
-  if (p === "company.linkedin") return ctx.account?.company_linkedin ?? null;
-
   if (p.startsWith("account.custom.")) {
     const key = p.slice("account.custom.".length);
     return ctx.account?.custom_data?.[key] ?? null;
@@ -82,6 +76,22 @@ export function resolvePath(ctx: RenderContext, path: string): unknown {
   if (p.startsWith("custom.")) {
     const key = p.slice("custom.".length);
     return ctx.contact.custom_data?.[key] ?? null;
+  }
+
+  // `company.*` is a forgiving alias over the account row. Both the short
+  // form (`company.name` → `account.company_name`) and the literal column
+  // form (`company.company_name`) resolve. Keeps authored templates tolerant
+  // of either mental model.
+  if (p.startsWith("company.")) {
+    const sub = p.slice("company.".length);
+    const a = ctx.account as Record<string, unknown> | null;
+    if (!a) return null;
+    // Literal column name: company.company_name, company.company_domain, etc.
+    if (sub in a) return a[sub] ?? null;
+    // Short alias: company.name → company_name.
+    const prefixed = `company_${sub}`;
+    if (prefixed in a) return a[prefixed] ?? null;
+    return null;
   }
 
   // account-level standard
@@ -234,11 +244,24 @@ function substitute(
   ctx: RenderContext,
   warnings: string[],
 ): string {
-  return template.replace(VAR_RE, (_match, path: string) => {
+  // Two-pass substitution. Token values may themselves contain `{{custom.x}}`,
+  // `{{account.custom.x}}`, or `{{company.x}}` placeholders (that's how the
+  // personalization rules compose an event-referenced opener out of a contact
+  // custom field). Pass 1 replaces `{{token.*}}` references with raw token
+  // values. Pass 2 then resolves the context paths revealed by that expansion
+  // along with any context paths that were already sitting in the template.
+  const afterTokens = template.replace(VAR_RE, (match, path: string) => {
+    if (!path.startsWith("token.")) return match;
+    const key = path.slice("token.".length);
+    if (key in strategyTokens) return strategyTokens[key]!;
+    warnings.push(`Unknown strategist token: ${key}`);
+    return "";
+  });
+
+  return afterTokens.replace(VAR_RE, (_match, path: string) => {
     if (path.startsWith("token.")) {
-      const key = path.slice("token.".length);
-      if (key in strategyTokens) return strategyTokens[key]!;
-      warnings.push(`Unknown strategist token: ${key}`);
+      // A nested token reference inside a token value — we don't chain.
+      warnings.push(`Nested token reference: ${path}`);
       return "";
     }
     const value = resolvePath(ctx, path);
