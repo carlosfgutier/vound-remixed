@@ -72,9 +72,23 @@ export function ContactsSection({ value, onChange, error }: Props) {
       onChange(null);
       return;
     }
+    // Drop rows that don't carry a usable email. The server-side zod schema
+    // rejects the whole batch if any record lacks `email` with an "@", which
+    // would bounce the user back to this step on submit. Exports from LinkedIn
+    // Sales Nav and similar tools routinely include header-only rows without
+    // an email — filter them here so a partially-populated CSV still flows
+    // through.
+    const withEmail = parsed.records.filter(
+      (r) => typeof r.email === "string" && r.email.includes("@"),
+    );
+    if (withEmail.length === 0) {
+      setParseError("No rows with an email address were found in this file.");
+      onChange(null);
+      return;
+    }
     onChange({
       mode: "csv",
-      records: parsed.records,
+      records: withEmail,
       detectedColumns: parsed.columns,
     });
   };
