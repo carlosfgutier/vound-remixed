@@ -72,6 +72,7 @@ export async function defineEnrichmentAction(
       campaign_type: input.campaignType,
       audience: input.audience,
       goals: input.goals,
+      providers: input.providers ?? [],
       enrichment_spec: spec,
       status: "defining",
     })
@@ -181,5 +182,5 @@ export async function defineEnrichmentAction(
   }
 
   revalidatePath("/", "layout");
-  redirect(`/campaigns/${campaignId}/enrichment`);
+  redirect(`/campaigns/${campaignId}/loading`);
 }

@@ -19,7 +19,7 @@ export default function NewCampaignPage() {
 
       <div className="border-b border-border px-8 py-4">
         <div className="mx-auto w-full max-w-3xl">
-          <PhaseTracker current="input" />
+          <PhaseTracker current="details" />
         </div>
       </div>
 
