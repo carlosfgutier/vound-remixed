@@ -15,10 +15,13 @@ export const contactRecordSchema = z
   });
 
 export const contactsSchema = z.object({
-  mode: z.enum(["csv", "individual", "webhook", "http"]),
+  mode: z.enum(["csv", "webhook", "http"]),
   records: z.array(contactRecordSchema).min(1, "Add at least one contact."),
   detectedColumns: z.array(z.string()).min(1),
 });
+
+export const providerIdSchema = z.string().trim().min(1);
+export const providersSchema = z.array(providerIdSchema).default([]);
 
 export const campaignInputSchema = z
   .object({
@@ -35,6 +38,7 @@ export const campaignInputSchema = z
       .min(1, "Pick at least one goal.")
       .max(MAX_RANKED_GOALS, `Max ${MAX_RANKED_GOALS} goals.`),
     contacts: contactsSchema,
+    providers: providersSchema,
   })
   .superRefine((val, ctx) => {
     val.goals.forEach((g, i) => {
