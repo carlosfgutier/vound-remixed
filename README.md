@@ -1,6 +1,6 @@
 # vound-remixed
 
-A remix of the vound outbound GTM app that collapses the old six-phase wizard
+A remix of the [vound outbound GTM app](https://github.com/carlosfgutier/vbound-vercel) that collapses the old six-phase wizard
 into a three-act story: **Details → Loading → Preview → Sequence**. The user
 submits a brief, the system researches every account and contact and drafts an
 email strategy in the background, and then the user reviews one unified
@@ -53,24 +53,41 @@ Guards:
 
 ## Running locally
 
+### Prerequisites
+
+You will need accounts and credentials for three external services before the
+app will run:
+
+| Service | What you need | Notes |
+| --- | --- | --- |
+| [Vercel](https://vercel.com) | A project on a **Pro** plan | Required for AI Gateway (OIDC auth to the model provider). Free/Hobby plans do not include AI Gateway. |
+| [Supabase](https://supabase.com) | A Postgres project + service-role key | Provision via the Vercel Marketplace (recommended — wires env vars automatically) or create one directly at supabase.com. |
+| [Resend](https://resend.com) | An API key | Optional — the app has a demo/dry-run mode that skips real delivery. Set the key to any placeholder value to use it. |
+
+### Setup
+
 ```bash
-# 1. Install
+# 1. Install dependencies
 npm install
 
-# 2. Pull OIDC + Supabase env from Vercel (project must be linked)
+# 2. Create a new Vercel project and link this directory to it
 vercel link
+
+# 3. In your Vercel project dashboard, add the four environment variables
+#    listed in the Environment variables section below, then pull them locally
 vercel env pull .env.local --yes
 
-# 3. Apply migrations to the linked Supabase project
-#    (migrations live in supabase/migrations/)
+# 4. Apply database migrations to your Supabase project
+#    Run each file in supabase/migrations/ in order via the Supabase SQL editor
+#    or the Supabase CLI:
+#      supabase db push --db-url <your-postgres-connection-string>
 
-# 4. Dev
+# 5. Start the dev server
 npm run dev
 ```
 
-`vercel env pull` wires up `VERCEL_OIDC_TOKEN` (for the AI Gateway), the
-Supabase URL + service role key, and Resend. The OIDC token is short-lived
-(~24h); re-run `vercel env pull` when it expires locally.
+The AI Gateway token pulled in step 3 is short-lived (~24h). Re-run
+`vercel env pull .env.local --yes` when it expires.
 
 ### Seeding a demo campaign
 
@@ -78,9 +95,8 @@ Supabase URL + service role key, and Resend. The OIDC token is short-lived
 node --env-file=.env.local scripts/seed-vercel-austin-campaign.mjs
 ```
 
-Seeds a fully-enriched, strategy-ready campaign (Vercel Austin Hangar Bar
-recruiting follow-up) so you can jump straight to Preview / Sequence without
-running the enrichment pipeline.
+Seeds a fully-enriched, strategy-ready campaign so you can jump straight to
+Preview / Sequence without running the enrichment pipeline.
 
 ---
 
@@ -163,7 +179,7 @@ replay caching, and sandbox-free Node.js access.
 | --- | --- | --- |
 | `enrichCampaignWorkflow` | `defineEnrichmentAction` after submit | Loads the campaign, runs per-account and per-contact enrichment with bounded concurrency (3), reconciles provider hits with AI outputs, emits SSE events via `getWritable<EnrichmentEvent>()`, and kicks off `generateEmailStrategyWorkflow` so Preview has a strategy by the time the user arrives. |
 | `generateEmailStrategyWorkflow` | Chained from enrich | Calls the AI strategist, validates against `emailStrategySchema`, writes the result to `campaigns.email_strategy`, and streams a `{type: "done"}` marker the loading page listens for. |
-| `launchCampaignWorkflow` | "Create and Launch" button in Preview Emails tab | Fans out one `sendContactSequenceWorkflow` per contact. Returns immediately; the fan-out continues durably. |
+| `launchCampaignWorkflow` | "Create and Launch" button | Fans out one `sendContactSequenceWorkflow` per contact. Returns immediately; the fan-out continues durably. |
 | `sendContactSequenceWorkflow` | Per-contact | Per strategy step: render → persist queued send → send via Resend → `Promise.race([sleep(step.day_offset), hook])`. The hook token is `contactHookToken(contactId, step)`; Resend webhooks resume it with `{kind: "reply" \| "bounce" \| "complaint" \| "opened" \| "delivered"}`. A terminal event exits the sequence early. |
 
 **Why Workflow over plain server actions / queues:**
@@ -214,9 +230,7 @@ sends deterministic, auditable, and free from runtime model drift.
   prop; the Details page passes it when `email_strategy` is not null so users
   can navigate forward from the snapshot.
 - **CSV normalization.** `parseCsvFile` trims + lowercases + snake_cases every
-  header, so a CSV with `"Email"` / `"First Name"` lines up with the schema
-  refine and `actions.ts` writes without bouncing the user back to the
-  contacts step on submit.
+  header, so a CSV with `"Email"` / `"First Name"` lines up with the schema.
 - **Durable email send.** The per-contact workflow uses `Promise.race` of
   `sleep` and a Workflow hook. Resend webhook → `resumeHook(token, payload)`
   → the race resolves → the workflow exits or advances deterministically.
@@ -228,10 +242,10 @@ sends deterministic, auditable, and free from runtime model drift.
 Pulled automatically by `vercel env pull`:
 
 ```
-VERCEL_OIDC_TOKEN            # AI Gateway auth (short-lived JWT)
-NEXT_PUBLIC_SUPABASE_URL     # Marketplace-provisioned Supabase
-SUPABASE_SERVICE_ROLE_KEY
-RESEND_API_KEY               # Email delivery (demo-mode available)
+<oidc_token>        # Short-lived JWT injected by Vercel for AI Gateway auth
+<supabase_url>      # Marketplace-provisioned Supabase project URL
+<supabase_key>      # Supabase server-side admin key (bypasses RLS — keep secret)
+<email_api_key>     # Resend API key (demo-mode available without a real key)
 ```
 
 ---
