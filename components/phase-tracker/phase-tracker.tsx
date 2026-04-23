@@ -6,6 +6,13 @@ type Props = {
   current: PhaseId;
   campaignId?: string;
   /**
+   * The furthest phase the campaign has actually reached in the DB, regardless
+   * of which phase the user is currently viewing. Phases up to and including
+   * this index are rendered as completed (blue) even when viewing an earlier
+   * phase.
+   */
+  maxReached?: PhaseId;
+  /**
    * When true, every phase with a resolvable href becomes clickable regardless
    * of whether it is past/current/future. Callers pass this once the campaign
    * has finished Loading (i.e. `email_strategy` is populated) so the user can
@@ -15,8 +22,11 @@ type Props = {
   unlockFuture?: boolean;
 };
 
-export function PhaseTracker({ current, campaignId, unlockFuture }: Props) {
+export function PhaseTracker({ current, campaignId, maxReached, unlockFuture }: Props) {
   const currentIndex = PHASES.find((p) => p.id === current)?.index ?? 1;
+  const maxReachedIndex = PHASES.find((p) => p.id === maxReached)?.index ?? currentIndex;
+  // Effective index for past/future styling: whichever is further along.
+  const highWaterIndex = Math.max(currentIndex, maxReachedIndex);
 
   // Auto-unlock heuristic: if we're already on Preview or Sequence, Loading
   // has obviously completed. Callers on Details pass `unlockFuture` explicitly
@@ -31,17 +41,18 @@ export function PhaseTracker({ current, campaignId, unlockFuture }: Props) {
         {PHASES.map((phase, i) => {
           const isCurrent = phase.id === current;
           const isPast = phase.index < currentIndex;
-          const isFuture = phase.index > currentIndex;
+          const isCompleted = !isCurrent && phase.index <= highWaterIndex;
+          const isFuture = phase.index > highWaterIndex;
           const href = phaseHref(phase.id, campaignId);
           const interactive =
-            href !== null && (isCurrent || isPast || postLoading);
+            href !== null && (isCurrent || isPast || isCompleted || postLoading);
 
           const dot = (
             <span
               className={cn(
                 "relative z-10 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full border transition-colors",
                 isCurrent && "border-accent bg-accent shadow-[0_0_0_3px_oklch(0.78_0.16_210_/_15%)]",
-                isPast && "border-accent/60 bg-accent/60",
+                isCompleted && !isCurrent && "border-accent/60 bg-accent/60",
                 isFuture && "border-border bg-surface",
               )}
             />
@@ -68,7 +79,7 @@ export function PhaseTracker({ current, campaignId, unlockFuture }: Props) {
                     aria-hidden
                     className={cn(
                       "absolute left-0 top-1/2 h-px w-1/2 -translate-y-1/2",
-                      phase.index <= currentIndex ? "bg-accent/40" : "bg-border",
+                      phase.index <= highWaterIndex ? "bg-accent/40" : "bg-border",
                     )}
                   />
                 )}
@@ -77,7 +88,7 @@ export function PhaseTracker({ current, campaignId, unlockFuture }: Props) {
                     aria-hidden
                     className={cn(
                       "absolute right-0 top-1/2 h-px w-1/2 -translate-y-1/2",
-                      phase.index < currentIndex ? "bg-accent/40" : "bg-border",
+                      phase.index < highWaterIndex ? "bg-accent/40" : "bg-border",
                     )}
                   />
                 )}

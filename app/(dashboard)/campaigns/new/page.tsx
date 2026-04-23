@@ -1,6 +1,8 @@
 import { CampaignForm } from "@/components/campaign-form/campaign-form";
 import { PhaseTracker } from "@/components/phase-tracker/phase-tracker";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "New campaign · vBound",
 };

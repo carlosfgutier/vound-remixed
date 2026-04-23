@@ -13,6 +13,7 @@ import {
   AlertCircle,
   ArrowRight,
   Ban,
+  CheckCircle2,
   Flag,
   Loader2,
   Play,
@@ -280,6 +281,8 @@ export function SequenceWorkbench({
   }
 
   const launchedAny = sends.length > 0 || contacts.some((c) => c.sequence_state !== "not_started");
+  const isCampaignDone =
+    launchedAny && inSequence.length === 0 && notStarted.length === 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -347,6 +350,27 @@ export function SequenceWorkbench({
         </div>
       </div>
 
+      {/* Campaign completion banner */}
+      {isCampaignDone && (
+        <div className="flex items-start gap-3 rounded border border-accent/30 bg-accent/8 px-4 py-4">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+          <div>
+            <p className="text-[13px] font-semibold text-foreground">
+              Campaign complete
+            </p>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">
+              All {eligibleCount} contacts have finished their sequence.
+              {exitedReplied.length > 0 &&
+                ` ${exitedReplied.length} replied.`}
+              {completed.length > 0 &&
+                ` ${completed.length} completed the full cadence.`}
+              {exitedOther.length > 0 &&
+                ` ${exitedOther.length} exited early (bounce / unsubscribe / failure).`}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Flow chart */}
       <FlowChart strategy={strategy} stats={stepCounts} />
 
@@ -388,7 +412,7 @@ export function SequenceWorkbench({
         totalSteps={strategy.sequence.length}
         demoMode={false}
         onSimulate={simulate}
-        emptyHint="No bounces, complaints, or failures."
+        emptyHint="No bounces, unsubscribes, or failures."
       />
 
       {completed.length > 0 && (
@@ -603,9 +627,9 @@ function ContactsTable({
                     </td>
                     <td className="px-4 py-2 align-top font-mono text-[10px] text-muted-foreground">
                       {lastSend
-                        ? `Step ${lastSend.step} · ${lastSend.status}`
+                        ? `Step ${lastSend.step} · ${displayStatus(lastSend.status)}`
                         : c.exit_reason
-                          ? c.exit_reason
+                          ? displayStatus(c.exit_reason)
                           : "—"}
                     </td>
                     {demoMode && (
@@ -620,7 +644,7 @@ function ContactsTable({
                             onClick={() => onSimulate(c.id, "bounce")}
                           />
                           <SimButton
-                            label="complain"
+                            label="unsub"
                             onClick={() => onSimulate(c.id, "complaint")}
                           />
                         </div>
@@ -640,6 +664,12 @@ function ContactsTable({
 function displayName(c: ContactLite): string {
   const name = [c.first_name, c.last_name].filter(Boolean).join(" ");
   return name || c.email;
+}
+
+function displayStatus(s: string): string {
+  if (s === "complained") return "unsubscribed";
+  if (s === "complaint") return "unsubscribed";
+  return s;
 }
 
 function ProgressBar({

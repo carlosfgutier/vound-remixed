@@ -37,7 +37,7 @@ export default async function PreviewPage({ params, searchParams }: PageProps) {
       supabase
         .from("campaigns")
         .select(
-          "id, name, campaign_type, enrichment_spec, email_strategy, strategy_run_id",
+          "id, name, campaign_type, enrichment_spec, email_strategy, strategy_run_id, launch_run_id",
         )
         .eq("id", id)
         .maybeSingle(),
@@ -85,7 +85,11 @@ export default async function PreviewPage({ params, searchParams }: PageProps) {
 
       <div className="border-b border-border px-8 py-4">
         <div className="mx-auto w-full max-w-6xl">
-          <PhaseTracker current="preview" campaignId={id} />
+          <PhaseTracker
+            current="preview"
+            campaignId={id}
+            maxReached={campaign.launch_run_id ? "sequence" : "preview"}
+          />
         </div>
       </div>
 

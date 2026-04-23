@@ -5,16 +5,12 @@ import {
   useEffect,
   useMemo,
   useState,
-  useTransition,
 } from "react";
-import { useRouter } from "next/navigation";
 import {
   AlertCircle,
-  ArrowRight,
   Check,
   Loader2,
   Mail,
-  Rocket,
 } from "lucide-react";
 import type { EmailStrategy } from "@/lib/schema/email-strategy";
 import {
@@ -29,7 +25,6 @@ import type {
   ContactLite,
 } from "@/app/(dashboard)/campaigns/[id]/preview/page";
 import {
-  launchCampaignAction,
   updateEmailStrategyAction,
 } from "@/app/(dashboard)/campaigns/[id]/preview/actions";
 
@@ -64,9 +59,6 @@ export function EmailsTab({
   initialStepIdx,
   onStepChange,
 }: Props) {
-  const router = useRouter();
-  const [, startTransition] = useTransition();
-
   const [strategy, setStrategy] = useState<EmailStrategy>(initialStrategy);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -228,23 +220,6 @@ export function EmailsTab({
   );
   const dynTokens = useMemo(() => dynamicTokenKeys(strategy), [strategy]);
 
-  // --- Launch ----------------------------------------------------------------
-  const [launching, setLaunching] = useState(false);
-  const [launchError, setLaunchError] = useState<string | null>(null);
-  const launch = useCallback(() => {
-    setLaunching(true);
-    setLaunchError(null);
-    startTransition(async () => {
-      const result = await launchCampaignAction(campaignId);
-      if (!result.ok) {
-        setLaunchError(result.error);
-        setLaunching(false);
-        return;
-      }
-      router.push(`/campaigns/${campaignId}/sequence`);
-    });
-  }, [campaignId, router]);
-
   // Truncated rationale display.
   const rationale = useMemo(
     () => truncate(strategy.framework_rationale, RATIONALE_MAX),
@@ -275,31 +250,8 @@ export function EmailsTab({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <SaveIndicator saving={saving} savedAt={savedAt} error={saveError} />
-          <button
-            type="button"
-            onClick={launch}
-            disabled={launching}
-            className={cn(
-              "inline-flex items-center gap-2 rounded-md border border-accent bg-accent px-3 py-1.5 text-[12px] font-medium text-accent-foreground transition hover:bg-accent/90",
-              launching && "cursor-not-allowed opacity-70",
-            )}
-          >
-            {launching ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Rocket className="h-3.5 w-3.5" />
-            )}
-            {launching ? "Launching…" : "Create and Launch"}
-            {!launching && <ArrowRight className="h-3 w-3" />}
-          </button>
         </div>
       </div>
-
-      {launchError && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-[12px] text-destructive">
-          {launchError}
-        </div>
-      )}
 
       {/* Step chip filter + contact dropdown */}
       <div className="flex flex-wrap items-center gap-4">
