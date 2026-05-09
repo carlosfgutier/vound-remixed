@@ -123,11 +123,6 @@ export function SidebarNav({ campaigns }: { campaigns: CampaignListItem[] }) {
           </ul>
         )}
       </nav>
-
-      <div className="border-t border-border px-4 py-3 text-[10px] text-muted-foreground/60">
-        <span className="font-mono">·</span>{" "}
-        <span className="font-mono">Built for Vercel</span>
-      </div>
     </aside>
   );
 }
